@@ -1,0 +1,308 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+library(tidyverse)
+library(rvest)
+library(stringr)
+library(scales)
+library(lubridate)
+library(ggthemes)
+library(reshape2)
+```
+
+```{r full decades: 1980s, include=FALSE}
+
+
+
+
+urls <- c("https://en.wikipedia.org/wiki/PFA_Team_of_the_Year_(2000s)",
+  "https://en.wikipedia.org/wiki/PFA_Team_of_the_Year_(1990s)",
+  "https://en.wikipedia.org/wiki/PFA_Team_of_the_Year_(1980s)")
+  
+
+#initialize data.frame
+df <- data.frame(`Pos.`= as.character(),
+                 Player = as.character(),
+                 Club = as.character(),
+                 `App.` = as.double(),
+                 year = as.character())
+
+
+div_table_numbers <- c(1,5,9,13,17,21,25,29,33,37)
+
+
+for (i in 1:length(urls)){
+  
+  for (j in 1:length(div_table_numbers)) {
+  
+    xpath_base <- '//*[@id="mw-content-text"]/div/table['
+    new_data <- urls[i] %>%
+      html() %>%
+      html_nodes(xpath = paste0(xpath_base,
+                              div_table_numbers[j],
+                              "]")) %>%
+      html_table()
+  
+    new_data <- new_data[[1]]
+    #new_data
+    
+    #get year
+    year_xpath_base <- '//*[@id="mw-content-text"]/div/h3['
+    year <- urls[i] %>%
+      html() %>%
+      html_nodes(xpath = paste0(year_xpath_base,
+                              j,
+                              "]"))%>%
+      html_text()
+    
+    year <- year %>% str_remove_all(fixed("[edit]"))
+    year
+    
+    
+    new_data$year <- year
+    df <- bind_rows(df,
+                    new_data)
+  
+  }
+}
+
+```
+
+```{r 1970s, include=FALSE}
+
+url_1970s <- "https://en.wikipedia.org/wiki/PFA_Team_of_the_Year_(1970s)"
+
+seventies_div_table_numbers <- c(1,5,9,13,17,21)
+
+for (j in 1:length(seventies_div_table_numbers)) {
+  
+    xpath_base <- '//*[@id="mw-content-text"]/div/table['
+    new_data <- url_1970s %>%
+      html() %>%
+      html_nodes(xpath = paste0(xpath_base,
+                              seventies_div_table_numbers[j],
+                              "]")) %>%
+      html_table()
+  
+    new_data <- new_data[[1]]
+    #new_data
+    
+    #get year
+    year_xpath_base <- '//*[@id="mw-content-text"]/div/h3['
+    year <- url_1970s %>%
+      html() %>%
+      html_nodes(xpath = paste0(year_xpath_base,
+                              j,
+                              "]"))%>%
+      html_text()
+    
+    year <- year %>% str_remove_all(fixed("[edit]"))
+    year
+    
+    
+    new_data$year <- year
+    df <- bind_rows(df,
+                    new_data)
+  
+  }
+
+
+
+```
+
+
+```{r 2010s, include=FALSE}
+
+url_2010s <- "https://en.wikipedia.org/wiki/PFA_Team_of_the_Year_(2010s)"
+
+twenty_tens_div_table_numbers <- c(1,5,9,13,17,22,27,32,37)
+
+for (j in 1:length(twenty_tens_div_table_numbers)) {
+  
+    xpath_base <- '//*[@id="mw-content-text"]/div/table['
+    new_data <- url_2010s %>%
+      html() %>%
+      html_nodes(xpath = paste0(xpath_base,
+                              twenty_tens_div_table_numbers[j],
+                              "]")) %>%
+      html_table()
+  
+    new_data <- new_data[[1]]
+    #new_data
+    
+    #get year
+    year_xpath_base <- '//*[@id="mw-content-text"]/div/h3['
+    year <- url_2010s %>%
+      html() %>%
+      html_nodes(xpath = paste0(year_xpath_base,
+                              j,
+                              "]"))%>%
+      html_text()
+    
+    year <- year %>% str_remove_all(fixed("[edit]"))
+    year
+    
+    
+    new_data$year <- year
+    df <- bind_rows(df,
+                    new_data)
+  
+  }
+
+
+
+```
+
+```{r}
+
+df <- df %>%
+  mutate(short_year = str_sub(year,1,4) %>% as.numeric() + 1)
+
+
+
+count_position <- df %>%
+  filter(Pos. %in% c("MF","FW")) %>%
+    count(Pos.,short_year, sort = TRUE)
+
+count_position %>%
+  ggplot(aes(x=short_year,y=n,color=Pos.,group=Pos.)) + 
+  geom_point(position=position_jitter(h=0.0025))+
+  geom_smooth(method = "loess")+
+  scale_x_continuous(breaks = seq(1973, 2017, 5))+
+  scale_y_continuous(breaks=seq(2,4,1))+
+  labs(x = "Year",
+       y = "Number of Players per Position",
+       title = "Midfielders and Forwards in English PFA Team of the Year (1973 - 2017)",
+       caption = "Data Source: Wikipedia")+
+  theme_few()+
+  theme(plot.title = element_text(hjust = 0.5))
+
+
+#ggsave()
+```
+
+```{r}
+
+club_count <- df %>% count(Club, sort = TRUE)
+
+club_count %>% 
+  top_n(n = 15) %>% 
+  ggplot(aes(x = reorder(Club,n), 
+                  y = n,
+                  fill = Club)) +
+  geom_col() +
+  coord_flip()+
+  theme_few()+
+  guides(fill=FALSE)+
+  labs(y = "# of Players",
+       x = "Club",
+       title = "Number of Players in PFA Team of the Year (1973 - 2017)",
+       caption = "Data Source: Wikipedia")+
+  theme(plot.title = element_text(hjust = 0.5))
+
+```
+
+```{r}
+
+club_count_year <- df %>% 
+  count(Club, year, sort = TRUE) %>%
+  mutate(club_year = paste(Club, year))
+
+club_count %>% 
+  top_n(n = 15) %>% 
+  ggplot(aes(x = reorder(Club,n), 
+                  y = n,
+                  fill = Club)) +
+  geom_col() +
+  coord_flip()+
+  theme_few()+
+  guides(fill=FALSE)+
+  labs(y = "# of Players",
+       x = "Club",
+       title = "Number of Players in PFA Team of the Year (1973 - 2017)",
+       caption = "Data Source: Wikipedia")+
+  theme(plot.title = element_text(hjust = 0.5))
+
+
+
+```
+
+
+Winners
+
+```{r}
+
+#pre-EPL, First Division
+
+first_div_top_three_url <- "https://en.wikipedia.org/wiki/List_of_English_football_champions"
+first_div_top_three_xpath <- '//*[@id="mw-content-text"]/div/table[2]'
+
+first_div_top_three <- first_div_top_three_url %>%
+  html() %>%
+  html_nodes(xpath = first_div_top_three_xpath) %>%
+  html_table()
+  
+             
+first_div_top_three <- first_div_top_three[[1]]           
+
+first_div_top_three <- first_div_top_three %>% filter(!(Year %in% c("1915/16–1918/19",
+                                                                    "1939/40–1945/46")))
+first_div_top_three$Goals <-first_div_top_three$Goals %>% as.numeric()
+
+first_div_top_three <- first_div_top_three %>% 
+  rename(`Champions` = `Champions(number of titles)`,
+         `Top goalscorer` = `Leading goalscorer`)
+
+###EPL
+
+epl_top_three_url <- "https://en.wikipedia.org/wiki/List_of_English_football_champions"
+epl_top_three_xpath <- '//*[@id="mw-content-text"]/div/table[3]'
+
+epl_top_three <- epl_top_three_url %>%
+  html() %>%
+  html_nodes(xpath = epl_top_three_xpath) %>%
+  html_table()
+  
+             
+epl_top_three <- epl_top_three[[1]] 
+
+epl_top_three <- epl_top_three %>% 
+  rename(`Champions` = `Champions (number of titles)`)
+
+english_top_three_total <- bind_rows(first_div_top_three,
+                                     epl_top_three)
+
+
+english_top_three_total$Champions <- english_top_three_total$Champions %>% str_remove_all(regex("\\([^)]*\\)"))
+
+english_top_three_total$Champions <- english_top_three_total$Champions %>% str_remove_all(regex("\\[.*?\\]"))
+
+english_top_three_total <- english_top_three_total %>%
+  mutate(short_year = str_sub(Year,1,4) %>% as.numeric() + 1)
+
+english_top_three_total <- english_top_three_total %>%
+  filter(short_year > 1973) %>%
+  select(-c(`Top goalscorer`,Goals))
+
+english_top_three_total_melted <- english_top_three_total %>%
+  melt(id.vars=c("Year","short_year"),
+       value.name = "Club")
+
+english_top_three_total_melted$Club <- english_top_three_total_melted$Club %>% str_trim(side = c( "right"))
+
+```
+
+```{r merge datasets}
+
+df_merged <- df %>% left_join(english_top_three_total_melted,
+                              by = c("Club","short_year"))
+
+```
+
+
+
+* Teams That won the Premier League and Had Fewest Players
+* Teams that didn't win the Premier League but had the most players included
