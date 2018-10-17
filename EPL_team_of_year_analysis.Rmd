@@ -1,9 +1,9 @@
 ---
-title: "R Notebook"
+title: "English Team of the Year Award Analysis"
 output: html_notebook
 ---
 
-```{r}
+```{r include=FALSE}
 library(tidyverse)
 library(rvest)
 library(stringr)
@@ -13,15 +13,11 @@ library(ggthemes)
 library(reshape2)
 ```
 
-```{r full decades: 1980s, include=FALSE}
 
+Step 1:
+Web Scraping of 1970s, 1980s, 1990s, 2000s, and 2010s Wikipedia pages for Team of the Year
 
-
-
-urls <- c("https://en.wikipedia.org/wiki/PFA_Team_of_the_Year_(2000s)",
-  "https://en.wikipedia.org/wiki/PFA_Team_of_the_Year_(1990s)",
-  "https://en.wikipedia.org/wiki/PFA_Team_of_the_Year_(1980s)")
-  
+```{r full decades 1980s-2000s, include=FALSE}
 
 #initialize data.frame
 df <- data.frame(`Pos.`= as.character(),
@@ -33,6 +29,9 @@ df <- data.frame(`Pos.`= as.character(),
 
 div_table_numbers <- c(1,5,9,13,17,21,25,29,33,37)
 
+urls <- c("https://en.wikipedia.org/wiki/PFA_Team_of_the_Year_(2000s)",
+  "https://en.wikipedia.org/wiki/PFA_Team_of_the_Year_(1990s)",
+  "https://en.wikipedia.org/wiki/PFA_Team_of_the_Year_(1980s)")
 
 for (i in 1:length(urls)){
   
@@ -55,14 +54,16 @@ for (i in 1:length(urls)){
       html() %>%
       html_nodes(xpath = paste0(year_xpath_base,
                               j,
-                              "]"))%>%
+                              "]")) %>%
       html_text()
     
+    #remove "[edit]" text which Wikipedia includes
     year <- year %>% str_remove_all(fixed("[edit]"))
     year
     
     
     new_data$year <- year
+    
     df <- bind_rows(df,
                     new_data)
   
@@ -71,7 +72,7 @@ for (i in 1:length(urls)){
 
 ```
 
-```{r 1970s, include=FALSE}
+```{r partial decadec1970s, include=FALSE}
 
 url_1970s <- "https://en.wikipedia.org/wiki/PFA_Team_of_the_Year_(1970s)"
 
@@ -88,17 +89,18 @@ for (j in 1:length(seventies_div_table_numbers)) {
       html_table()
   
     new_data <- new_data[[1]]
-    #new_data
     
     #get year
     year_xpath_base <- '//*[@id="mw-content-text"]/div/h3['
+    
     year <- url_1970s %>%
       html() %>%
       html_nodes(xpath = paste0(year_xpath_base,
                               j,
-                              "]"))%>%
+                              "]") )%>%
       html_text()
     
+    #remove "[edit]" text which Wikipedia includes
     year <- year %>% str_remove_all(fixed("[edit]"))
     year
     
@@ -114,7 +116,7 @@ for (j in 1:length(seventies_div_table_numbers)) {
 ```
 
 
-```{r 2010s, include=FALSE}
+```{r partial decade 2010s, include=FALSE}
 
 url_2010s <- "https://en.wikipedia.org/wiki/PFA_Team_of_the_Year_(2010s)"
 
@@ -130,8 +132,8 @@ for (j in 1:length(twenty_tens_div_table_numbers)) {
                               "]")) %>%
       html_table()
   
+    #create new_data df from new_data list
     new_data <- new_data[[1]]
-    #new_data
     
     #get year
     year_xpath_base <- '//*[@id="mw-content-text"]/div/h3['
@@ -156,10 +158,17 @@ for (j in 1:length(twenty_tens_div_table_numbers)) {
 
 ```
 
-```{r}
+
+Step 2: Exploratory Analysis
+
+```{r seeing how formation has changed}
 
 df <- df %>%
   mutate(short_year = str_sub(year,1,4) %>% as.numeric() + 1)
+
+order_positions <- c("GK","DF","MF","FW")
+
+df <- df %>% mutate(Pos. = fct_relevel(Pos., order_positions))
 
 
 
@@ -169,18 +178,18 @@ count_position <- df %>%
 
 count_position %>%
   ggplot(aes(x=short_year,y=n,color=Pos.,group=Pos.)) + 
-  geom_point(position=position_jitter(h=0.0025))+
+  geom_point(position=position_jitter(h=0.005))+
   geom_smooth(method = "loess")+
   scale_x_continuous(breaks = seq(1973, 2017, 5))+
   scale_y_continuous(breaks=seq(2,4,1))+
   labs(x = "Year",
        y = "Number of Players per Position",
-       title = "Midfielders and Forwards in English PFA Team of the Year (1973 - 2017)",
+       title = "Count of Midfielders and Forwards in English PFA Team of the Year (1973 - 2017)",
        caption = "Data Source: Wikipedia")+
   theme_few()+
   theme(plot.title = element_text(hjust = 0.5))
 
-
+ggsave(filename = "static_plot_players_per_formation.png",width = 30, height = 15, units = "cm")
 #ggsave()
 ```
 
@@ -203,6 +212,8 @@ club_count %>%
        caption = "Data Source: Wikipedia")+
   theme(plot.title = element_text(hjust = 0.5))
 
+#ggsave(filename = "static_plot_players_per_club.png",width = 30, height = 15, units = "cm")
+
 ```
 
 ```{r}
@@ -211,11 +222,11 @@ club_count_year <- df %>%
   count(Club, year, sort = TRUE) %>%
   mutate(club_year = paste(Club, year))
 
-club_count %>% 
+club_count_year %>% 
   top_n(n = 15) %>% 
-  ggplot(aes(x = reorder(Club,n), 
+  ggplot(aes(x = reorder(club_year,n), 
                   y = n,
-                  fill = Club)) +
+                  fill = club_year)) +
   geom_col() +
   coord_flip()+
   theme_few()+
@@ -228,7 +239,37 @@ club_count %>%
 
 
 
+
+
 ```
+
+```{r}
+
+by_position_top_performers <- df %>% count(Player,Pos.)
+
+by_position_top_performers %>% 
+  group_by(Pos.) %>% 
+  top_n(n = 5, wt = n) %>%
+  ggplot(aes(x = reorder(Player,n),
+             y = n,
+             fill = Pos.)) +
+  geom_col() +
+  facet_wrap(~Pos., scales = "free_y") +
+  coord_flip() +
+  theme_few() +
+  scale_y_continuous(breaks=seq(0,10,2)) +
+  guides(fill=FALSE) +
+  labs(x = NULL,
+       y = NULL,
+       title = "Number of Appearances in PFA Team of the Year per Position (1973 - 2017)",
+       caption = "\nData Source: Wikipedia")+
+  theme(plot.title = element_text(hjust = 0.5))
+  
+
+ggsave(filename = "static_plot_players_appearances_number.png",width = 30, height = 15, units = "cm")
+
+```
+
 
 
 Winners
@@ -287,9 +328,11 @@ english_top_three_total <- english_top_three_total %>%
   filter(short_year > 1973) %>%
   select(-c(`Top goalscorer`,Goals))
 
+#melt
 english_top_three_total_melted <- english_top_three_total %>%
   melt(id.vars=c("Year","short_year"),
-       value.name = "Club")
+       value.name = "Club",
+       variable.name = "Team_Ranking")
 
 english_top_three_total_melted$Club <- english_top_three_total_melted$Club %>% str_trim(side = c( "right"))
 
@@ -306,3 +349,65 @@ df_merged <- df %>% left_join(english_top_three_total_melted,
 
 * Teams That won the Premier League and Had Fewest Players
 * Teams that didn't win the Premier League but had the most players included
+
+
+How many players from champions were picked
+```{r}
+
+players_champions_per_year <- df_merged %>%
+  filter(!is.na(Team_Ranking)) %>%
+  count(short_year, Team_Ranking)
+  
+players_champions_per_year %>% ggplot(aes(x = short_year,
+                                          y = n,
+                                          color = Team_Ranking))+ geom_point(position=position_jitter(h=0.005))+
+   scale_x_continuous(breaks = seq(1973, 2017, 2)) +
+  theme_few()
+
+```
+
+
+Champions of England with the most player of the year awards
+```{r}
+
+champions_players <- df_merged %>%
+  filter(Team_Ranking == "Champions") %>%
+  count(Club, short_year, year, sort = TRUE) %>%
+  mutate(club_year = paste(Club, year))
+
+champions_players %>% 
+  top_n(n = 10, wt = n) %>% 
+  ggplot(aes(x = reorder(club_year,n), 
+                  y = n,
+                  fill = Club)) +
+  geom_col() +
+  coord_flip()+
+  theme_few()+
+  guides(fill=FALSE)+
+  labs(y = "# of Players",
+       x = "Club",
+       title = "Champions of England w/ Most Players in PFA Team of the Year (1973 - 2017)",
+       caption = "Data Source: Wikipedia")+
+  theme(plot.title = element_text(hjust = 0.5)) +
+  scale_fill_manual(values = c("Manchester United" = "darkred", 
+                                 "Liverpool" = "orange",
+                                 "Arsenal" = "yellow",
+                                 "Chelsea" = "blue",
+                                 "Blackburn Rovers" = "lightblue",
+                                 "Leeds United" = "grey",
+                                 "Manchester City" = "dark green"))
+
+
+```
+
+
+Winners with the least 
+```{r}
+
+```
+
+
+Second or third place teams with the most 
+
+
+Future work
