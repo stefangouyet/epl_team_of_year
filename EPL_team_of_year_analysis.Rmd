@@ -4,6 +4,7 @@ output: html_notebook
 ---
 
 ```{r include=FALSE}
+
 library(tidyverse)
 library(rvest)
 library(stringr)
@@ -11,11 +12,13 @@ library(scales)
 library(lubridate)
 library(ggthemes)
 library(reshape2)
+
 ```
 
 
 Step 1:
 Web Scraping of 1970s, 1980s, 1990s, 2000s, and 2010s Wikipedia pages for Team of the Year
+* Need to perform scraping on 1980s-2000s pages (full decades) and then individually curated loops for 1970s and 2010s (partial decades)
 
 ```{r full decades 1980s-2000s, include=FALSE}
 
@@ -161,10 +164,11 @@ for (j in 1:length(twenty_tens_div_table_numbers)) {
 
 Step 2: Exploratory Analysis
 
-```{r seeing how formation has changed}
+```{r how formations have changed}
 
 df <- df %>%
-  mutate(short_year = str_sub(year,1,4) %>% as.numeric() + 1)
+  mutate(short_year = str_sub(year,1,4) %>% 
+           as.numeric() + 1)
 
 order_positions <- c("GK","DF","MF","FW")
 
@@ -184,16 +188,16 @@ count_position %>%
   scale_y_continuous(breaks=seq(2,4,1))+
   labs(x = "Year",
        y = "Number of Players per Position",
-       title = "Count of Midfielders and Forwards in English PFA Team of the Year (1973 - 2017)",
+       title = "Count of Midfielders and Forwards in PFA Team of the Year (1973 - 2017)",
        caption = "Data Source: Wikipedia")+
   theme_few()+
   theme(plot.title = element_text(hjust = 0.5))
 
 ggsave(filename = "static_plot_players_per_formation.png",width = 30, height = 15, units = "cm")
-#ggsave()
+
 ```
 
-```{r}
+```{r players per team over time}
 
 club_count <- df %>% count(Club, sort = TRUE)
 
@@ -210,40 +214,31 @@ club_count %>%
        x = "Club",
        title = "Number of Players in PFA Team of the Year (1973 - 2017)",
        caption = "Data Source: Wikipedia")+
-  theme(plot.title = element_text(hjust = 0.5))
+  theme(plot.title = element_text(hjust = 0.5)) +
+   scale_fill_manual(values = c("Manchester United" = "darkred", 
+                                 "Liverpool" = "orange",
+                                 "Arsenal" = "yellow",
+                                 "Chelsea" = "blue",
+                                 "Blackburn Rovers" = "lightblue",
+                                 "Leeds United" = "grey",
+                                 "Manchester City" = "dark green",
+                               "Derby County" = "black",
+                               "Everton" = "gold",
+                               "Nottingham Forest" = "red",
+                               "Ipswich Town" = "darkblue",
+                               "Southampton" = "orange",
+                               "Newcastle United" = "darkgrey",
+                               "Aston Villa" = "purple", 
+                               "Tottenham Hotspur" = "navy"
+                               ))
 
-#ggsave(filename = "static_plot_players_per_club.png",width = 30, height = 15, units = "cm")
-
-```
-
-```{r}
-
-club_count_year <- df %>% 
-  count(Club, year, sort = TRUE) %>%
-  mutate(club_year = paste(Club, year))
-
-club_count_year %>% 
-  top_n(n = 15) %>% 
-  ggplot(aes(x = reorder(club_year,n), 
-                  y = n,
-                  fill = club_year)) +
-  geom_col() +
-  coord_flip()+
-  theme_few()+
-  guides(fill=FALSE)+
-  labs(y = "# of Players",
-       x = "Club",
-       title = "Number of Players in PFA Team of the Year (1973 - 2017)",
-       caption = "Data Source: Wikipedia")+
-  theme(plot.title = element_text(hjust = 0.5))
-
-
-
-
+ggsave(filename = "static_plot_players_per_club.png",width = 30, height = 15, units = "cm")
 
 ```
 
-```{r}
+
+
+```{r by position top performers}
 
 by_position_top_performers <- df %>% count(Player,Pos.)
 
@@ -272,7 +267,7 @@ ggsave(filename = "static_plot_players_appearances_number.png",width = 30, heigh
 
 
 
-Winners
+Step 3: Web scraping soccer standings and merging with our Team of the Year dataset
 
 ```{r}
 
@@ -347,28 +342,119 @@ df_merged <- df %>% left_join(english_top_three_total_melted,
 
 
 
+Step 4: More interesting analysis with new df merged dataset
+Analyses:
 * Teams That won the Premier League and Had Fewest Players
 * Teams that didn't win the Premier League but had the most players included
+etc.
+
+Champions of England with the most player of the year awards
+
+```{r most_players_picked per season}
+
+club_count_year <- df_merged %>% 
+  count(Club, year, Team_Ranking, sort = TRUE) %>%
+  mutate(club_year = paste(Club, year))
+
+club_count_year %>% 
+  top_n(n = 10, wt = n) %>% 
+  ggplot(aes(x = reorder(club_year,n), 
+                  y = n))+
+  geom_col(aes(fill = factor(ifelse(Team_Ranking == "Champions", 
+                                1,
+                                2)))) +
+  coord_flip()+
+  theme_few()+
+  guides(fill=FALSE)+
+  labs(y = "# of Players",
+       x = "Club",
+       title = "Teams with Most Representation in PFA Team of the Year (1973 - 2017)",
+       caption = "Data Source: Wikipedia")+
+  theme(plot.title = element_text(hjust = 0.5)) +
+  scale_fill_solarized()
+
+ggsave(filename = "teams_most_representation_per_year.png",width = 30, height = 15, units = "cm")
 
 
-How many players from champions were picked
-```{r}
+```
 
-players_champions_per_year <- df_merged %>%
-  filter(!is.na(Team_Ranking)) %>%
-  count(short_year, Team_Ranking)
-  
-players_champions_per_year %>% ggplot(aes(x = short_year,
-                                          y = n,
-                                          color = Team_Ranking))+ geom_point(position=position_jitter(h=0.005))+
-   scale_x_continuous(breaks = seq(1973, 2017, 2)) +
-  theme_few()
+```{r champions with least players picked}
+
+club_count_year_champions <- df_merged %>% 
+  count(Club, year, Team_Ranking, sort = TRUE) %>%
+  mutate(club_year = paste(Club, year)) %>%
+  filter(Team_Ranking == "Champions")
+
+club_count_year_champions %>% 
+  top_n(n = -10, wt = n) %>% 
+  ggplot(aes(x = reorder(club_year,n), 
+                  y = n))+
+  geom_col(aes(fill = Club)) +
+  coord_flip()+
+  theme_few()+
+  guides(fill=FALSE)+
+  labs(y = "# of Players",
+       x = "Club",
+       title = "English Champions with Fewest Players in PFA Team of the Year (1973 - 2017)",
+       caption = "Data Source: Wikipedia")+
+  theme(plot.title = element_text(hjust = 0.5)) +
+  scale_y_continuous(breaks = seq(0,2,1)) +
+  scale_fill_manual(values = c("Manchester United" = "darkred", 
+                                 "Liverpool" = "orange",
+                                 "Arsenal" = "yellow",
+                                 "Chelsea" = "blue",
+                                 "Blackburn Rovers" = "lightblue",
+                                 "Leeds United" = "grey",
+                                 "Manchester City" = "dark green",
+                               "Derby County" = "black",
+                               "Everton" = "gold",
+                               "Nottingham Forest" = "red"))
+
+
+ggsave(filename = "teams_most_representation_per_year_lowest_champions.png",width = 30, height = 15, units = "cm")
+
+
 
 ```
 
 
-Champions of England with the most player of the year awards
-```{r}
+
+```{r non winning teams with most representation}
+
+club_count_year_non_champions <- df_merged %>% 
+  count(Club, year, Team_Ranking, sort = TRUE) %>%
+  mutate(club_year = paste(Club, year)) %>%
+   filter(!(Team_Ranking == "Champions") | is.na(Team_Ranking))
+  
+
+club_count_year_non_champions %>% 
+  top_n(n = 10, wt = n) %>% 
+  ggplot(aes(x = reorder(club_year,n), 
+                  y = n))+
+  geom_col(aes(fill = factor(ifelse(Team_Ranking == "Runners-up", 
+                                1,
+                                2)))) +
+  coord_flip()+
+  theme_few()+
+  guides(fill=FALSE)+
+  labs(y = "# of Players",
+       x = "Club",
+       title = "Non-Champions with Most Representation in PFA Team of the Year (1973 - 2017)",
+       caption = "Data Source: Wikipedia")+
+  theme(plot.title = element_text(hjust = 0.5))
+
+ggsave(filename = "teams_most_representation_per_year_losers.png",width = 30, height = 15, units = "cm")
+
+
+
+```
+
+
+
+
+
+```{r champions with most players}
+
 
 champions_players <- df_merged %>%
   filter(Team_Ranking == "Champions") %>%
@@ -400,14 +486,37 @@ champions_players %>%
 
 ```
 
-
-Winners with the least 
+Second or third place teams with the most 
 ```{r}
+
+non_champions_players <- df_merged %>%
+  filter(Team_Ranking %in% c("Runners-up","Third place"))%>%
+  count(Club, short_year, year, Team_Ranking, sort = TRUE) %>%
+  mutate(club_year = paste(Club, year))
+
+champions_players %>% 
+  top_n(n = 10, wt = n) %>% 
+  ggplot(aes(x = reorder(club_year,n), 
+                  y = n,
+                  fill = Club)) +
+  geom_col() +
+  coord_flip()+
+  theme_few()+
+  guides(fill=FALSE)+
+  labs(y = "# of Players",
+       x = "Club",
+       title = "Champions of England w/ Most Players in PFA Team of the Year (1973 - 2017)",
+       caption = "Data Source: Wikipedia")+
+  theme(plot.title = element_text(hjust = 0.5)) +
+  scale_fill_manual(values = c("Manchester United" = "darkred", 
+                                 "Liverpool" = "orange",
+                                 "Arsenal" = "yellow",
+                                 "Chelsea" = "blue",
+                                 "Blackburn Rovers" = "lightblue",
+                                 "Leeds United" = "grey",
+                                 "Manchester City" = "dark green"))
 
 ```
 
 
-Second or third place teams with the most 
-
-
-Future work
+Potential Future work Ideas??
